@@ -1,13 +1,12 @@
 import "./App.css";
 import Chat from "./components/chat";
 
-
-
-  const sendMessage = () => {
-  return (      
+function App() {
+  return (
+    <div className="App">
       <Chat />
-  )
+    </div>
+  );
 }
 
-export default sendMessage;
-
+export default App;
