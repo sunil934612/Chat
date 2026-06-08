@@ -39,7 +39,7 @@ const groq = new Groq({
 
 /* ---------------- HEALTH CHECK ---------------- */
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "Backend running 🚀" });
+  res.json({ success: true, message: "Backend running" });
 });
 
 /* ---------------- RESUME ANALYZE API ---------------- */
