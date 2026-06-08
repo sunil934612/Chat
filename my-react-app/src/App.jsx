@@ -1,5 +1,5 @@
 import "./App.css";
-import Chat from "./frontend/chat";
+import Chat from "./components/chat";
 
 
 
