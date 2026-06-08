@@ -27,7 +27,9 @@ const ResumeAnalyzer = () => {
     try {
 
       const response = await fetch(
-        "http://localhost:5000/api/analyze",
+        // "http://localhost:5000/api/analyze",
+
+        "https://chat-1-ullv.onrender.com/api/analyze",
         {
           method: "POST",
           body: formData,
