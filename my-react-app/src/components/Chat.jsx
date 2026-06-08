@@ -1,50 +1,44 @@
-
-
 import React, { useState } from "react";
-import './Chat.css'
+import "./Chat.css";
 
 const ResumeAnalyzer = () => {
-
   const [file, setFile] = useState(null);
-
   const [analysis, setAnalysis] = useState("");
-
   const [loading, setLoading] = useState(false);
 
-  const handleUpload = async () => {
+  // 🔥 LOCAL BACKEND URL
+  const API_URL = "http://localhost:5000/api/analyze";
 
+  const handleUpload = async () => {
     if (!file) {
-      alert("Please upload resume");
+      alert("Please upload a resume");
       return;
     }
 
     const formData = new FormData();
-
     formData.append("resume", file);
 
     setLoading(true);
+    setAnalysis("");
 
     try {
-
-      const response = await fetch(
-        // "http://localhost:5000/api/analyze",
-
-        "https://chat-1-ullv.onrender.com/api/analyze",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      const response = await fetch(API_URL, {
+        method: "POST",
+        body: formData
+      });
 
       const data = await response.json();
 
-      setAnalysis(data.analysis);
+      // ✅ SAFE RESPONSE HANDLING
+      if (data.success) {
+        setAnalysis(data.analysis);
+      } else {
+        setAnalysis(data.error || "Analysis failed");
+      }
 
     } catch (error) {
-
       console.log(error);
-
-      setAnalysis("Error analyzing resume");
+      setAnalysis("Backend not running or network error");
     }
 
     setLoading(false);
@@ -53,8 +47,8 @@ const ResumeAnalyzer = () => {
   return (
     <div className="container py-5">
 
-      <h1 className="mb-4 text-center">
-        AI Resume Analyzer
+      <h1 className="text-center mb-4">
+        AI Resume Analyzer (Local)
       </h1>
 
       <div className="card p-4 shadow">
@@ -63,9 +57,7 @@ const ResumeAnalyzer = () => {
           type="file"
           className="form-control mb-3"
           accept=".pdf"
-          onChange={(e) =>
-            setFile(e.target.files[0])
-          }
+          onChange={(e) => setFile(e.target.files[0])}
         />
 
         <button
@@ -77,22 +69,20 @@ const ResumeAnalyzer = () => {
 
       </div>
 
+      {/* LOADING */}
       {loading && (
-        <div className="mt-4">
+        <div className="mt-3 text-center">
           <h5>Analyzing Resume...</h5>
         </div>
       )}
 
+      {/* RESULT */}
       {analysis && (
         <div className="card p-4 shadow mt-4">
 
           <h3>Analysis Result</h3>
 
-          <pre
-            style={{
-              whiteSpace: "pre-wrap",
-            }}
-          >
+          <pre style={{ whiteSpace: "pre-wrap" }}>
             {analysis}
           </pre>
 
