@@ -11,7 +11,6 @@ dotenv.config();
 
 const app = express();
 
-/* ---------------- MIDDLEWARE ---------------- */
 app.use(cors({
   origin: "*",
   methods: ["GET", "POST"],
@@ -20,29 +19,33 @@ app.use(cors({
 
 app.use(express.json());
 
-/* ---------------- UPLOAD FOLDER ---------------- */
+
+
 const uploadDir = "uploads";
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
 }
 
-/* ---------------- MULTER ---------------- */
+
+
 const upload = multer({
   dest: uploadDir,
   limits: { fileSize: 5 * 1024 * 1024 }
 }).single("resume");
 
-/* ---------------- GROQ ---------------- */
+
+
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY
 });
 
-/* ---------------- HEALTH CHECK ---------------- */
+
 app.get("/", (req, res) => {
   res.json({ success: true, message: "Backend running" });
 });
 
-/* ---------------- RESUME ANALYZE API ---------------- */
+
+
 app.post("/api/analyze", (req, res) => {
   upload(req, res, async (err) => {
     let filePath;
