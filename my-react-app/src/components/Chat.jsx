@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { FaChartBar, FaChartLine } from "react-icons/fa";
-import { FaRobot, FaLightbulb } from "react-icons/fa";
-import { FaExclamationTriangle, FaTimesCircle } from "react-icons/fa";
-import { FaTools, FaEdit } from "react-icons/fa";
+import { FaChartBar } from "react-icons/fa";
+import { FaRobot } from "react-icons/fa";
+import { FaExclamationTriangle } from "react-icons/fa";
+import { FaTools } from "react-icons/fa";
 import "./Chat.css";
 
 const ResumeAnalyzer = () => {
@@ -12,8 +12,7 @@ const ResumeAnalyzer = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // ✅ FIXED: use deployed backend (NOT localhost)
-  const API_URL = "https://chat-3-5znd.onrender.com/api/analyze";
+  const API_URL = "https://chat-9-88gp.onrender.com/api/analyze";
 
   useEffect(() => {
     const saved = sessionStorage.getItem("resumeData");
@@ -21,13 +20,11 @@ const ResumeAnalyzer = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-
         if (parsed?.analysis) {
           setAnalysis(parsed.analysis);
           setFileName(parsed.fileName);
         }
-      } catch (err) {
-        console.log("Session parse error:", err);
+      } catch {
         sessionStorage.removeItem("resumeData");
       }
     }
@@ -53,37 +50,36 @@ const ResumeAnalyzer = () => {
       return;
     }
 
+    setLoading(true);
+    setError("");
+    setAnalysis(null);
+
     const formData = new FormData();
     formData.append("resume", file);
 
-    setLoading(true);
-    setError("");
-
-    // ✅ FIX: mobile-safe timeout
     const controller = new AbortController();
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, 90000); // 90 sec for AI + PDF
+    const timeout = setTimeout(() => controller.abort(), 120000);
 
     try {
       const response = await fetch(API_URL, {
         method: "POST",
         body: formData,
         signal: controller.signal,
-          keepalive: true
-
       });
 
       clearTimeout(timeout);
 
-      // ✅ FIX: show real backend error
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(errText);
+      let data;
+     try {
+       const text = await response.text();
+       data = JSON.parse(text);
+       } catch {
+        throw new Error("Server not responding correctly");
       }
 
-      const data = await response.json();
-      console.log("API RESPONSE:", data);
+      if (!response.ok) {
+        throw new Error(data?.error || "Server error");
+      }
 
       if (data.success) {
         setAnalysis(data.analysis);
@@ -99,16 +95,14 @@ const ResumeAnalyzer = () => {
         setError(data.error || "Analysis failed");
       }
     } catch (error) {
-      console.log("FULL ERROR:", error);
-
       if (error.name === "AbortError") {
-        setError("Request timed out. Please try again.");
+        setError("Request timed out. Try again.");
       } else {
-        setError(error.message || "Something went wrong. Try again.");
+        setError("Network error. Please check your internet connection.");
       }
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const handleClear = () => {
@@ -139,9 +133,7 @@ const ResumeAnalyzer = () => {
           onChange={handleFileChange}
         />
 
-        {fileName && (
-          <p className="file-name">{fileName}</p>
-        )}
+        {fileName && <p className="file-name">{fileName}</p>}
 
         <div className="btn-group">
           <button className="analyze-btn" onClick={handleUpload}>
@@ -155,9 +147,7 @@ const ResumeAnalyzer = () => {
       </div>
 
       {error && (
-        <p style={{ color: "red", marginBottom: "10px", textAlign: "center" }}>
-          {error}
-        </p>
+        <p style={{ color: "red", textAlign: "center" }}>{error}</p>
       )}
 
       {loading && (
@@ -205,7 +195,6 @@ const ResumeAnalyzer = () => {
       )}
 
       {analysis && (
-
         <div className="result-grid">
 
           <div>
