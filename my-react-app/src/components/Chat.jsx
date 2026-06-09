@@ -12,12 +12,12 @@ const ResumeAnalyzer = () => {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // ✅ ADDED ERROR STATE
+
   const [error, setError] = useState("");
 
   const API_URL = "http://localhost:5000/api/analyze";
 
-  /* ---------- LOAD SESSION ---------- */
+
   useEffect(() => {
     const saved = sessionStorage.getItem("resumeData");
 
@@ -36,13 +36,13 @@ const ResumeAnalyzer = () => {
     }
   }, []);
 
-  /* ---------- FILE CHANGE ---------- */
+
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
 
     if (!selectedFile) return;
 
-    // ✅ FILE VALIDATION ERROR
+
     if (selectedFile.type !== "application/pdf") {
       setError("Only PDF files are allowed");
       return;
@@ -53,7 +53,7 @@ const ResumeAnalyzer = () => {
     setFileName(selectedFile.name);
   };
 
-  /* ---------- ANALYZE ---------- */
+
   const handleUpload = async () => {
 
     if (!file) {
@@ -73,7 +73,7 @@ const ResumeAnalyzer = () => {
         body: formData
       });
 
-      // ✅ HTTP ERROR HANDLING
+
       if (!response.ok) {
         throw new Error("Server error occurred");
       }
@@ -106,7 +106,7 @@ const ResumeAnalyzer = () => {
     setLoading(false);
   };
 
-  /* ---------- CLEAR ---------- */
+
   const handleClear = () => {
     sessionStorage.removeItem("resumeData");
 
@@ -122,7 +122,7 @@ const ResumeAnalyzer = () => {
 
  
 
-      {/* ---------- TOP ---------- */}
+
       <div className="top-section">
 
         <div>
@@ -139,7 +139,7 @@ const ResumeAnalyzer = () => {
 
       </div>
 
-      {/* ---------- UPLOAD ---------- */}
+
       <div className="upload-card">
 
         <input
@@ -176,7 +176,7 @@ const ResumeAnalyzer = () => {
       </div>
 
 
-         {/* ---------- ERROR DISPLAY ---------- */}
+
       {error && (
         <p style={{ color: "red", marginBottom: "10px", textAlign:'center' }}>
           {error}
@@ -184,14 +184,13 @@ const ResumeAnalyzer = () => {
       )}
     
 
-      {/* ---------- LOADING ---------- */}
       {loading && (
         <div className="loading-card">
           <h3>Analyzing Resume...</h3>
         </div>
       )}
 
-      {/* ---------- FEATURES ---------- */}
+
       {!analysis && (
         <div className="features-section">
 
@@ -230,12 +229,12 @@ const ResumeAnalyzer = () => {
         </div>
       )}
 
-      {/* ---------- RESULTS ---------- */}
+
       {analysis && (
 
         <div className="result-grid">
 
-          {/* (NO CHANGES BELOW - YOUR ORIGINAL UI) */}
+
           <div>
 
             <div className="card-box file-card">
