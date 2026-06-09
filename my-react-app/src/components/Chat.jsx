@@ -70,6 +70,8 @@ const ResumeAnalyzer = () => {
         method: "POST",
         body: formData,
         signal: controller.signal,
+          keepalive: true
+
       });
 
       clearTimeout(timeout);
