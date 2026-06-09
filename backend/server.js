@@ -11,105 +11,95 @@ dotenv.config();
 
 const app = express();
 
-/* ---------- CORS ---------- */
-app.use(cors());
+/* ---------------- CORS (FIXED FOR MOBILE + VERCEL) ---------------- */
+app.use(
+  cors({
+    origin: "*", // for production you can replace with Vercel URL
+    methods: ["GET", "POST"],
+  })
+);
 
-/* ---------- UPLOAD FOLDER ---------- */
+/* ---------------- BODY LIMIT (IMPORTANT FOR MOBILE FILES) ---------------- */
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ extended: true, limit: "20mb" }));
+
+/* ---------------- UPLOAD FOLDER ---------------- */
 const uploadDir = "uploads";
-
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
 }
 
-/* ---------- MULTER ---------- */
+/* ---------------- MULTER CONFIG ---------------- */
 const upload = multer({
   dest: uploadDir,
   limits: {
-    fileSize: 5 * 1024 * 1024
-  }
+    fileSize: 10 * 1024 * 1024, // 10MB safe for resumes
+  },
 });
 
-/* ---------- GROQ ---------- */
+/* ---------------- GROQ INIT ---------------- */
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY
+  apiKey: process.env.GROQ_API_KEY,
 });
 
-/* ---------- HOME ---------- */
+/* ---------------- HEALTH CHECK ---------------- */
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "Backend running 🚀"
+    message: "Backend running 🚀",
   });
 });
 
-/* ---------- ANALYZE ---------- */
-app.post(
-  "/api/analyze",
-  upload.single("resume"),
-  async (req, res) => {
+/* ---------------- ANALYZE API ---------------- */
+app.post("/api/analyze", upload.single("resume"), async (req, res) => {
+  let filePath;
 
-    let filePath;
+  try {
+    /* ---------- FILE CHECK ---------- */
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: "No PDF uploaded",
+      });
+    }
 
+    filePath = path.resolve(req.file.path);
+
+    /* ---------- READ PDF ---------- */
+    const buffer = fs.readFileSync(filePath);
+
+    let pdfData;
     try {
+      pdfData = await pdfParse(buffer);
+    } catch (err) {
+      return res.status(400).json({
+        success: false,
+        error: "Cannot read PDF file",
+      });
+    }
 
-      /* ---------- FILE CHECK ---------- */
-      if (!req.file) {
-        return res.status(400).json({
-          success: false,
-          error: "No PDF uploaded"
-        });
-      }
+    const resumeText = pdfData.text.replace(/\s+/g, " ").trim();
 
-      filePath = path.resolve(req.file.path);
+    if (!resumeText || resumeText.length < 20) {
+      return res.status(400).json({
+        success: false,
+        error: "No readable text found in resume",
+      });
+    }
 
-      /* ---------- READ PDF ---------- */
-      const buffer = fs.readFileSync(filePath);
+    /* ---------------- GROQ TIMEOUT WRAPPER ---------------- */
+    const aiPromise = groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        {
+          role: "system",
+          content: `
+You are an ATS Resume Analyzer.
 
-      let pdfData;
-
-      try {
-
-        pdfData = await pdfParse(buffer);
-
-      } catch {
-
-        return res.status(400).json({
-          success: false,
-          error: "Cannot read PDF"
-        });
-      }
-
-      const resumeText =
-        pdfData.text.replace(/\s+/g, " ").trim();
-
-      if (!resumeText || resumeText.length < 20) {
-        return res.status(400).json({
-          success: false,
-          error: "No readable text found"
-        });
-      }
-
-      /* ---------- AI RESPONSE ---------- */
-      const aiResponse =
-        await groq.chat.completions.create({
-
-          model: "llama-3.3-70b-versatile",
-
-          messages: [
-            {
-              role: "system",
-              content: `
-You are an advanced ATS Resume Analyzer.
-
-Analyze the resume carefully and return ONLY valid JSON.
-
-Generate REALISTIC scores based on the resume content.
-
-Format:
+Return ONLY valid JSON:
 
 {
   "score": 85,
-
   "scoreBreakdown": {
     "formatting": 90,
     "content": 85,
@@ -117,105 +107,75 @@ Format:
     "experience": 88,
     "achievements": 75
   },
-
-  "strengths": [
-    "Strong frontend projects",
-    "Good technical skills"
-  ],
-
-  "improvements": [
-    "Add more quantified achievements",
-    "Improve resume summary"
-  ],
-
-  "skills": [
-    "React.js",
-    "Node.js",
-    "MongoDB"
-  ],
-
-  "missingSkills": [
-    "Docker",
-    "AWS"
-  ],
-
-  "aiSuggestion":
-    "Add measurable achievements and ATS keywords.",
-
-  "summary":
-    "Well-structured resume with strong technical skills."
+  "strengths": [],
+  "improvements": [],
+  "skills": [],
+  "missingSkills": [],
+  "aiSuggestion": "",
+  "summary": ""
 }
 
 Rules:
-- Return ONLY valid JSON
-- No markdown
-- No explanation
-- No extra text
-- All scores must be generated dynamically from resume quality
-`
-            },
-            {
-              role: "user",
-              content: resumeText
-            }
-          ]
-        });
+- ONLY JSON
+- NO markdown
+- NO explanation
+`,
+        },
+        {
+          role: "user",
+          content: resumeText,
+        },
+      ],
+    });
 
-      /* ---------- CLEAN AI RESPONSE ---------- */
-      let raw =
-        aiResponse.choices[0].message.content;
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("AI timeout")), 60000)
+    );
 
-      raw = raw
-        .replace(/```json/g, "")
-        .replace(/```/g, "")
-        .trim();
+    const aiResponse = await Promise.race([aiPromise, timeoutPromise]);
 
-      /* ---------- PARSE JSON ---------- */
-      let analysis;
+    /* ---------------- CLEAN RESPONSE ---------------- */
+    let raw = aiResponse.choices[0].message.content;
 
-      try {
+    raw = raw.replace(/```json/g, "").replace(/```/g, "").trim();
 
-        analysis = JSON.parse(raw);
-
-      } catch {
-
-        return res.status(500).json({
-          success: false,
-          error: "Invalid AI JSON response"
-        });
-      }
-
-      /* ---------- DELETE FILE ---------- */
-      fs.unlinkSync(filePath);
-
-      /* ---------- SUCCESS ---------- */
-      return res.json({
-        success: true,
-        analysis
-      });
-
-    } catch (error) {
-
-      console.log(error);
-
-      if (
-        filePath &&
-        fs.existsSync(filePath)
-      ) {
-        fs.unlinkSync(filePath);
-      }
-
+    let analysis;
+    try {
+      analysis = JSON.parse(raw);
+    } catch (err) {
       return res.status(500).json({
         success: false,
-        error: error.message
+        error: "Invalid AI JSON response",
       });
     }
-  }
-);
 
-/* ---------- SERVER ---------- */
+    /* ---------------- DELETE FILE SAFELY ---------------- */
+    if (filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    /* ---------------- SUCCESS ---------------- */
+    return res.json({
+      success: true,
+      analysis,
+    });
+  } catch (error) {
+    console.log("ERROR:", error.message);
+
+    if (filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Server error",
+    });
+  }
+});
+
+/* ---------------- START SERVER ---------------- */
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
