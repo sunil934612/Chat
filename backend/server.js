@@ -11,133 +11,209 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type"]
-}));
+/* ---------- CORS ---------- */
+app.use(cors());
 
-app.use(express.json());
-
-
-
+/* ---------- UPLOAD FOLDER ---------- */
 const uploadDir = "uploads";
+
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
 }
 
-
-
+/* ---------- MULTER ---------- */
 const upload = multer({
   dest: uploadDir,
-  limits: { fileSize: 5 * 1024 * 1024 }
-}).single("resume");
+  limits: {
+    fileSize: 5 * 1024 * 1024
+  }
+});
 
-
-
+/* ---------- GROQ ---------- */
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY
 });
 
-
+/* ---------- HOME ---------- */
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "Backend running" });
+  res.json({
+    success: true,
+    message: "Backend running 🚀"
+  });
 });
 
+/* ---------- ANALYZE ---------- */
+app.post(
+  "/api/analyze",
+  upload.single("resume"),
+  async (req, res) => {
 
-
-app.post("/api/analyze", (req, res) => {
-  upload(req, res, async (err) => {
     let filePath;
 
     try {
-      if (err) {
-        return res.status(400).json({
-          success: false,
-          error: err.message
-        });
-      }
 
+      /* ---------- FILE CHECK ---------- */
       if (!req.file) {
         return res.status(400).json({
           success: false,
-          error: "No file uploaded"
+          error: "No PDF uploaded"
         });
       }
 
       filePath = path.resolve(req.file.path);
+
+      /* ---------- READ PDF ---------- */
       const buffer = fs.readFileSync(filePath);
 
       let pdfData;
+
       try {
+
         pdfData = await pdfParse(buffer);
+
       } catch {
+
         return res.status(400).json({
           success: false,
-          error: "Cannot read PDF (scanned or corrupted)"
+          error: "Cannot read PDF"
         });
       }
 
-      const resumeText = pdfData.text?.replace(/\s+/g, " ").trim();
+      const resumeText =
+        pdfData.text.replace(/\s+/g, " ").trim();
 
-      if (!resumeText || resumeText.length < 30) {
+      if (!resumeText || resumeText.length < 20) {
         return res.status(400).json({
           success: false,
-          error: "No readable text in resume"
+          error: "No readable text found"
         });
       }
 
-      const response = await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "system",
-            content: `
-You are an ATS Resume Analyzer.
-Return:
-- ATS Score (0-100)
-- Strengths
-- Weaknesses
-- Skills Found
-- Missing Skills
-- Suggestions
-- Short Summary
-            `
-          },
-          {
-            role: "user",
-            content: resumeText
-          }
-        ]
-      });
+      /* ---------- AI RESPONSE ---------- */
+      const aiResponse =
+        await groq.chat.completions.create({
 
-      const analysis =
-        response?.choices?.[0]?.message?.content ||
-        "No analysis generated";
+          model: "llama-3.3-70b-versatile",
 
-      fs.unlink(filePath, () => {});
+          messages: [
+            {
+              role: "system",
+              content: `
+You are an advanced ATS Resume Analyzer.
 
+Analyze the resume carefully and return ONLY valid JSON.
+
+Generate REALISTIC scores based on the resume content.
+
+Format:
+
+{
+  "score": 85,
+
+  "scoreBreakdown": {
+    "formatting": 90,
+    "content": 85,
+    "skills": 80,
+    "experience": 88,
+    "achievements": 75
+  },
+
+  "strengths": [
+    "Strong frontend projects",
+    "Good technical skills"
+  ],
+
+  "improvements": [
+    "Add more quantified achievements",
+    "Improve resume summary"
+  ],
+
+  "skills": [
+    "React.js",
+    "Node.js",
+    "MongoDB"
+  ],
+
+  "missingSkills": [
+    "Docker",
+    "AWS"
+  ],
+
+  "aiSuggestion":
+    "Add measurable achievements and ATS keywords.",
+
+  "summary":
+    "Well-structured resume with strong technical skills."
+}
+
+Rules:
+- Return ONLY valid JSON
+- No markdown
+- No explanation
+- No extra text
+- All scores must be generated dynamically from resume quality
+`
+            },
+            {
+              role: "user",
+              content: resumeText
+            }
+          ]
+        });
+
+      /* ---------- CLEAN AI RESPONSE ---------- */
+      let raw =
+        aiResponse.choices[0].message.content;
+
+      raw = raw
+        .replace(/```json/g, "")
+        .replace(/```/g, "")
+        .trim();
+
+      /* ---------- PARSE JSON ---------- */
+      let analysis;
+
+      try {
+
+        analysis = JSON.parse(raw);
+
+      } catch {
+
+        return res.status(500).json({
+          success: false,
+          error: "Invalid AI JSON response"
+        });
+      }
+
+      /* ---------- DELETE FILE ---------- */
+      fs.unlinkSync(filePath);
+
+      /* ---------- SUCCESS ---------- */
       return res.json({
         success: true,
         analysis
       });
 
     } catch (error) {
-      console.error(error);
 
-      if (filePath && fs.existsSync(filePath)) {
-        fs.unlink(filePath, () => {});
+      console.log(error);
+
+      if (
+        filePath &&
+        fs.existsSync(filePath)
+      ) {
+        fs.unlinkSync(filePath);
       }
 
       return res.status(500).json({
         success: false,
-        error: "Server error"
+        error: error.message
       });
     }
-  });
-});
+  }
+);
 
-/* ---------------- START SERVER ---------------- */
+/* ---------- SERVER ---------- */
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
