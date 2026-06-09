@@ -1,17 +1,63 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { FaChartBar, FaChartLine } from "react-icons/fa";
+import { FaRobot, FaLightbulb } from "react-icons/fa";
+import { FaExclamationTriangle, FaTimesCircle } from "react-icons/fa";
+import { FaTools, FaEdit } from "react-icons/fa";
 import "./Chat.css";
 
 const ResumeAnalyzer = () => {
+
   const [file, setFile] = useState(null);
-  const [analysis, setAnalysis] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // 🔥 LOCAL BACKEND URL
+  // ✅ ADDED ERROR STATE
+  const [error, setError] = useState("");
+
   const API_URL = "http://localhost:5000/api/analyze";
 
+  /* ---------- LOAD SESSION ---------- */
+  useEffect(() => {
+    const saved = sessionStorage.getItem("resumeData");
+
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+
+        if (parsed?.analysis) {
+          setAnalysis(parsed.analysis);
+          setFileName(parsed.fileName);
+        }
+      } catch (err) {
+        console.log("Session parse error:", err);
+        sessionStorage.removeItem("resumeData");
+      }
+    }
+  }, []);
+
+  /* ---------- FILE CHANGE ---------- */
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+
+    if (!selectedFile) return;
+
+    // ✅ FILE VALIDATION ERROR
+    if (selectedFile.type !== "application/pdf") {
+      setError("Only PDF files are allowed");
+      return;
+    }
+
+    setError("");
+    setFile(selectedFile);
+    setFileName(selectedFile.name);
+  };
+
+  /* ---------- ANALYZE ---------- */
   const handleUpload = async () => {
+
     if (!file) {
-      alert("Please upload a resume");
+      setError("Please upload PDF file");
       return;
     }
 
@@ -19,7 +65,7 @@ const ResumeAnalyzer = () => {
     formData.append("resume", file);
 
     setLoading(true);
-    setAnalysis("");
+    setError("");
 
     try {
       const response = await fetch(API_URL, {
@@ -27,70 +73,267 @@ const ResumeAnalyzer = () => {
         body: formData
       });
 
+      // ✅ HTTP ERROR HANDLING
+      if (!response.ok) {
+        throw new Error("Server error occurred");
+      }
+
       const data = await response.json();
 
-      // ✅ SAFE RESPONSE HANDLING
+      console.log(data);
+
       if (data.success) {
+
         setAnalysis(data.analysis);
+
+        sessionStorage.setItem(
+          "resumeData",
+          JSON.stringify({
+            analysis: data.analysis,
+            fileName
+          })
+        );
+
       } else {
-        setAnalysis(data.error || "Analysis failed");
+        setError(data.error || "Analysis failed");
       }
 
     } catch (error) {
       console.log(error);
-      setAnalysis("Backend not running or network error");
+      setError("Something went wrong. Please check your connection and try again.");
     }
 
     setLoading(false);
   };
 
+  /* ---------- CLEAR ---------- */
+  const handleClear = () => {
+    sessionStorage.removeItem("resumeData");
+
+    setAnalysis(null);
+    setFile(null);
+    setFileName("");
+    setError("");
+  };
+
   return (
-    <div className="container py-5">
 
-      <h1 className="text-center mb-4">
-        AI Resume Analyzer (Local)
-      </h1>
+    <div className="main-container">
 
-      <div className="card p-4 shadow">
+ 
 
-        <input
-          type="file"
-          className="form-control mb-3"
-          accept=".pdf"
-          onChange={(e) => setFile(e.target.files[0])}
-        />
+      {/* ---------- TOP ---------- */}
+      <div className="top-section">
 
-        <button
-          className="btn btn-primary"
-          onClick={handleUpload}
-        >
-          Analyze Resume
-        </button>
+        <div>
+
+          <h1 className="main-heading">
+            AI Resume Analyzer
+          </h1>
+
+          <p className="sub-heading">
+            Upload resume and get AI-powered ATS insights
+          </p>
+
+        </div>
 
       </div>
 
-      {/* LOADING */}
+      {/* ---------- UPLOAD ---------- */}
+      <div className="upload-card">
+
+        <input
+          type="file"
+          accept=".pdf"
+          className="file-input"
+          onChange={handleFileChange}
+        />
+
+        {fileName && (
+          <p className="file-name">
+            {fileName}
+          </p>
+        )}
+
+        <div className="btn-group">
+
+          <button
+            className="analyze-btn"
+            onClick={handleUpload}
+          >
+            Analyze Resume
+          </button>
+
+          <button
+            className="clear-btn"
+            onClick={handleClear}
+          >
+            Clear
+          </button>
+
+        </div>
+
+      </div>
+
+
+         {/* ---------- ERROR DISPLAY ---------- */}
+      {error && (
+        <p style={{ color: "red", marginBottom: "10px", textAlign:'center' }}>
+          {error}
+        </p>
+      )}
+    
+
+      {/* ---------- LOADING ---------- */}
       {loading && (
-        <div className="mt-3 text-center">
-          <h5>Analyzing Resume...</h5>
+        <div className="loading-card">
+          <h3>Analyzing Resume...</h3>
         </div>
       )}
 
-      {/* RESULT */}
+      {/* ---------- FEATURES ---------- */}
+      {!analysis && (
+        <div className="features-section">
+
+          <div className="feature-card">
+            <div className="feature-icon">
+              <FaChartBar style={{ color: "#3b82f6", fontSize: "22px" }} />
+            </div>
+            <h3>ATS Score Analysis</h3>
+            <p>Get detailed ATS compatibility score and improve resume ranking.</p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">
+              <FaRobot style={{ color: "#10b981", fontSize: "22px" }} />
+            </div>
+            <h3>AI Suggestions</h3>
+            <p>Receive smart AI recommendations to improve your resume instantly.</p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">
+              <FaExclamationTriangle style={{ color: "#ef4444", fontSize: "22px" }} />
+            </div>
+            <h3>Missing Skills</h3>
+            <p>Detect important missing technologies and keywords from your resume.</p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">
+              <FaTools style={{ color: "#f59e0b", fontSize: "22px" }} />
+            </div>
+            <h3>Resume Improvements</h3>
+            <p>Improve formatting, readability, and overall resume quality.</p>
+          </div>
+
+        </div>
+      )}
+
+      {/* ---------- RESULTS ---------- */}
       {analysis && (
-        <div className="card p-4 shadow mt-4">
 
-          <h3>Analysis Result</h3>
+        <div className="result-grid">
 
-          <pre style={{ whiteSpace: "pre-wrap" }}>
-            {analysis}
-          </pre>
+          {/* (NO CHANGES BELOW - YOUR ORIGINAL UI) */}
+          <div>
+
+            <div className="card-box file-card">
+              <div>
+                <h3>{fileName}</h3>
+                <p className="light-text">Resume analyzed successfully</p>
+              </div>
+              <span className="success-badge">Analyzed</span>
+            </div>
+
+            <div className="card-box score-card">
+              <div className="score-circle">
+                <h1>{analysis.score}</h1>
+                <span>/100</span>
+              </div>
+              <div>
+                <h2 className="excellent-text">Overall Score</h2>
+                <p className="result-text">{analysis.summary}</p>
+              </div>
+            </div>
+
+            <div className="card-box">
+              <h3 className="card-title">Strengths</h3>
+              <ul>
+                {analysis.strengths?.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="card-box">
+              <h3 className="card-title">Areas to Improve</h3>
+              <ul>
+                {analysis.improvements?.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
+              </ul>
+            </div>
+
+          </div>
+
+          <div>
+
+            <div className="card-box">
+              <h3 className="card-title">Score Breakdown</h3>
+
+              {Object.entries(analysis.scoreBreakdown || {}).map(([key, value]) => (
+                <div key={key} className="progress-wrapper">
+                  <div className="progress-header">
+                    <span className="capitalize">{key}</span>
+                    <span>{value}/100</span>
+                  </div>
+                  <div className="progress-bar">
+                    <div className="progress-fill" style={{ width: `${value}%` }}></div>
+                  </div>
+                </div>
+              ))}
+
+            </div>
+
+            <div className="card-box">
+              <h3 className="card-title">Top Skills Found</h3>
+              <div className="skills-container">
+                {analysis.skills?.map((skill, index) => (
+                  <span key={index} className="skill-badge">
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="card-box">
+              <h3 className="card-title">Missing Skills</h3>
+              <div className="skills-container">
+                {analysis.missingSkills?.map((skill, index) => (
+                  <span key={index} className="missing-badge">
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="suggestion-box">
+              <h3 className="suggestion-title">AI Suggestion</h3>
+              <p className="suggestion-text">
+                {analysis.aiSuggestion}
+              </p>
+            </div>
+
+          </div>
 
         </div>
       )}
 
     </div>
+
   );
+
 };
 
 export default ResumeAnalyzer;
