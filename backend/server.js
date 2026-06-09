@@ -78,7 +78,9 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
       });
     }
 
-    const resumeText = pdfData.text.replace(/\s+/g, " ").trim();
+    const resumeText = pdfData.text
+          .replace(/\s+/g, " ")
+          .slice(0, 6000);
 
     if (!resumeText || resumeText.length < 20) {
       return res.status(400).json({
