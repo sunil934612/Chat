@@ -12,7 +12,7 @@ const ResumeAnalyzer = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const API_URL = "https://chat-10-heit.onrender.com/api/analyze";
+  const API_URL = "https://chat-11.onrender.com/api/analyze";
 
   useEffect(() => {
     const saved = sessionStorage.getItem("resumeData");
@@ -95,11 +95,8 @@ const ResumeAnalyzer = () => {
         setError(data.error || "Analysis failed");
       }
     } catch (error) {
-      if (error.name === "AbortError") {
-        setError("Request timed out. Try again.");
-      } else {
-        setError("Network error. Please check your internet connection.");
-      }
+      setError(error.message || "An error occurred during analysis");
+      
     } finally {
       setLoading(false);
     }
