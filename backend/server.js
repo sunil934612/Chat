@@ -11,51 +11,49 @@ dotenv.config();
 
 const app = express();
 
-
-if (!process.env.GROQ_API_KEY) {
-  console.error("Missing GROQ_API_KEY");
-}
-
-/* ---------------- CORS (FIXED FOR MOBILE + VERCEL) ---------------- */
-
-app.use(cors({
+/* ---------------- CORS (FIXED FOR VERCEL + MOBILE) ---------------- */
+const corsOptions = {
   origin: function (origin, callback) {
+    // allow server-to-server / postman
     if (!origin) return callback(null, true);
 
-    try {
-      if (
-        origin.includes("vercel.app") ||
-        origin.includes("localhost")
-      ) {
-        return callback(null, true);
-      }
-    } catch (err) {
+    // allow localhost + all vercel apps
+    if (
+      origin.includes("localhost") ||
+      origin.includes("vercel.app")
+    ) {
       return callback(null, true);
     }
 
-    return callback(null, true);
+    return callback(null, true); // fallback allow (prevents network error)
   },
-  methods: ["GET", "POST"],
-}));
-/* ---------------- BODY LIMIT (IMPORTANT FOR MOBILE FILES) ---------------- */
+  methods: ["GET", "POST", "OPTIONS"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+
+
+
+/* ---------------- BODY PARSER ---------------- */
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
-/* ---------------- UPLOAD FOLDER ---------------- */
+/* ---------------- UPLOAD DIR ---------------- */
 const uploadDir = "uploads";
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
 }
 
-/* ---------------- MULTER CONFIG ---------------- */
+/* ---------------- MULTER ---------------- */
 const upload = multer({
   dest: uploadDir,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB safe for resumes
+    fileSize: 10 * 1024 * 1024,
   },
 });
 
-/* ---------------- GROQ INIT ---------------- */
+/* ---------------- GROQ ---------------- */
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
@@ -64,7 +62,7 @@ const groq = new Groq({
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "Backend running ",
+    message: "Backend running",
   });
 });
 
@@ -73,7 +71,6 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
   let filePath;
 
   try {
-    /* ---------- FILE CHECK ---------- */
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -83,13 +80,12 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
 
     filePath = path.resolve(req.file.path);
 
-    /* ---------- READ PDF ---------- */
     const buffer = fs.readFileSync(filePath);
 
     let pdfData;
     try {
       pdfData = await pdfParse(buffer);
-    } catch (err) {
+    } catch {
       return res.status(400).json({
         success: false,
         error: "Cannot read PDF file",
@@ -97,27 +93,24 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
     }
 
     const resumeText = pdfData.text
-          .replace(/\s+/g, " ")
-          .slice(0, 6000);
+      .replace(/\s+/g, " ")
+      .slice(0, 6000);
 
     if (!resumeText || resumeText.length < 20) {
       return res.status(400).json({
         success: false,
-        error: "No readable text found in resume",
+        error: "No readable text found",
       });
     }
 
-    /* ---------------- GROQ TIMEOUT WRAPPER ---------------- */
+    /* ---------------- AI CALL ---------------- */
     const aiPromise = groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
       messages: [
         {
           role: "system",
           content: `
-You are an ATS Resume Analyzer.
-
-Return ONLY valid JSON:
-
+Return ONLY JSON:
 {
   "score": 85,
   "scoreBreakdown": {
@@ -134,12 +127,8 @@ Return ONLY valid JSON:
   "aiSuggestion": "",
   "summary": ""
 }
-
-Rules:
-- ONLY JSON
-- NO markdown
-- NO explanation
-`,
+NO explanation, ONLY JSON.
+          `,
         },
         {
           role: "user",
@@ -154,31 +143,30 @@ Rules:
 
     const aiResponse = await Promise.race([aiPromise, timeoutPromise]);
 
-    /* ---------------- CLEAN RESPONSE ---------------- */
     let raw = aiResponse.choices[0].message.content;
-
     raw = raw.replace(/```json/g, "").replace(/```/g, "").trim();
 
     let analysis;
+
     try {
       analysis = JSON.parse(raw);
-    } catch (err) {
+    } catch {
       return res.status(500).json({
         success: false,
-        error: "Invalid AI JSON response",
+        error: "Invalid AI response",
       });
     }
 
-    /* ---------------- DELETE FILE SAFELY ---------------- */
+    /* ---------------- CLEAN FILE ---------------- */
     if (filePath && fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
 
-    /* ---------------- SUCCESS ---------------- */
     return res.json({
       success: true,
       analysis,
     });
+
   } catch (error) {
     console.log("ERROR:", error.message);
 
