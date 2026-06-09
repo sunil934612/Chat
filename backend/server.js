@@ -37,7 +37,6 @@ app.use(cors({
   },
   methods: ["GET", "POST"],
 }));
-
 /* ---------------- BODY LIMIT (IMPORTANT FOR MOBILE FILES) ---------------- */
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
