@@ -6,15 +6,13 @@ import { FaTools, FaEdit } from "react-icons/fa";
 import "./Chat.css";
 
 const ResumeAnalyzer = () => {
-
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState("");
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
-
-
   const [error, setError] = useState("");
 
+  // ✅ FIXED: use deployed backend (NOT localhost)
   const API_URL = "https://chat-3-5znd.onrender.com/api/analyze";
 
   useEffect(() => {
@@ -35,12 +33,9 @@ const ResumeAnalyzer = () => {
     }
   }, []);
 
-
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
-
     if (!selectedFile) return;
-
 
     if (selectedFile.type !== "application/pdf") {
       setError("Only PDF files are allowed");
@@ -52,9 +47,7 @@ const ResumeAnalyzer = () => {
     setFileName(selectedFile.name);
   };
 
-
   const handleUpload = async () => {
-
     if (!file) {
       setError("Please upload PDF file");
       return;
@@ -66,49 +59,58 @@ const ResumeAnalyzer = () => {
     setLoading(true);
     setError("");
 
+    // ✅ FIX: mobile-safe timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, 90000); // 90 sec for AI + PDF
+
     try {
       const response = await fetch(API_URL, {
         method: "POST",
-        body: formData
+        body: formData,
+        signal: controller.signal,
       });
 
+      clearTimeout(timeout);
 
+      // ✅ FIX: show real backend error
       if (!response.ok) {
-        throw new Error("Server error occurred");
+        const errText = await response.text();
+        throw new Error(errText);
       }
 
       const data = await response.json();
-
-      console.log(data);
+      console.log("API RESPONSE:", data);
 
       if (data.success) {
-
         setAnalysis(data.analysis);
 
         sessionStorage.setItem(
           "resumeData",
           JSON.stringify({
             analysis: data.analysis,
-            fileName
+            fileName,
           })
         );
-
       } else {
         setError(data.error || "Analysis failed");
       }
-
     } catch (error) {
-      console.log(error);
-      setError("Something went wrong. Please check your connection and try again.");
+      console.log("FULL ERROR:", error);
+
+      if (error.name === "AbortError") {
+        setError("Request timed out. Please try again.");
+      } else {
+        setError(error.message || "Something went wrong. Try again.");
+      }
     }
 
     setLoading(false);
   };
 
-
   const handleClear = () => {
     sessionStorage.removeItem("resumeData");
-
     setAnalysis(null);
     setFile(null);
     setFileName("");
@@ -116,31 +118,18 @@ const ResumeAnalyzer = () => {
   };
 
   return (
-
     <div className="main-container">
 
- 
-
-
       <div className="top-section">
-
         <div>
-
-          <h1 className="main-heading">
-            AI Resume Analyzer
-          </h1>
-
+          <h1 className="main-heading">AI Resume Analyzer</h1>
           <p className="sub-heading">
             Upload resume and get AI-powered ATS insights
           </p>
-
         </div>
-
       </div>
 
-
       <div className="upload-card">
-
         <input
           type="file"
           accept=".pdf"
@@ -149,46 +138,31 @@ const ResumeAnalyzer = () => {
         />
 
         {fileName && (
-          <p className="file-name">
-            {fileName}
-          </p>
+          <p className="file-name">{fileName}</p>
         )}
 
         <div className="btn-group">
-
-          <button
-            className="analyze-btn"
-            onClick={handleUpload}
-          >
+          <button className="analyze-btn" onClick={handleUpload}>
             Analyze Resume
           </button>
 
-          <button
-            className="clear-btn"
-            onClick={handleClear}
-          >
+          <button className="clear-btn" onClick={handleClear}>
             Clear
           </button>
-
         </div>
-
       </div>
 
-
-
       {error && (
-        <p style={{ color: "red", marginBottom: "10px", textAlign:'center' }}>
+        <p style={{ color: "red", marginBottom: "10px", textAlign: "center" }}>
           {error}
         </p>
       )}
-    
 
       {loading && (
         <div className="loading-card">
           <h3>Analyzing Resume...</h3>
         </div>
       )}
-
 
       {!analysis && (
         <div className="features-section">
@@ -228,11 +202,9 @@ const ResumeAnalyzer = () => {
         </div>
       )}
 
-
       {analysis && (
 
         <div className="result-grid">
-
 
           <div>
 
@@ -329,9 +301,7 @@ const ResumeAnalyzer = () => {
       )}
 
     </div>
-
   );
-
 };
 
 export default ResumeAnalyzer;
