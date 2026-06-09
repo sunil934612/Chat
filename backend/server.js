@@ -46,7 +46,7 @@ const groq = new Groq({
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "Backend running 🚀",
+    message: "Backend running",
   });
 });
 
