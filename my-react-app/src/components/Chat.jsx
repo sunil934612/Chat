@@ -15,8 +15,7 @@ const ResumeAnalyzer = () => {
 
   const [error, setError] = useState("");
 
-  const API_URL = "http://localhost:5000/api/analyze";
-
+  const API_URL = "https://chat-3-5znd.onrender.com/api/analyze";
 
   useEffect(() => {
     const saved = sessionStorage.getItem("resumeData");
