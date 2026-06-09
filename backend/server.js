@@ -18,14 +18,21 @@ if (!process.env.GROQ_API_KEY) {
 
 /* ---------------- CORS (FIXED FOR MOBILE + VERCEL) ---------------- */
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://analyzer-steel.vercel.app"
-];
-
 app.use(cors({
-  origin: allowedOrigins,
-  methods: ["GET", "POST"]
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+
+    if (origin.includes("vercel.app")) {
+      return callback(null, true);
+    }
+
+    if (origin.includes("localhost")) {
+      return callback(null, true);
+    }
+
+    callback(null, true);
+  },
+  methods: ["GET", "POST"],
 }));
 
 /* ---------------- BODY LIMIT (IMPORTANT FOR MOBILE FILES) ---------------- */
