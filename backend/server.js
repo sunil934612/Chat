@@ -22,15 +22,18 @@ app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
 
-    if (origin.includes("vercel.app")) {
+    try {
+      if (
+        origin.includes("vercel.app") ||
+        origin.includes("localhost")
+      ) {
+        return callback(null, true);
+      }
+    } catch (err) {
       return callback(null, true);
     }
 
-    if (origin.includes("localhost")) {
-      return callback(null, true);
-    }
-
-    callback(null, true);
+    return callback(null, true);
   },
   methods: ["GET", "POST"],
 }));
