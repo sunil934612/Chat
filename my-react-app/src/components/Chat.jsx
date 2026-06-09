@@ -12,7 +12,7 @@ const ResumeAnalyzer = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const API_URL = "https://chat-9-88gp.onrender.com/api/analyze";
+  const API_URL = "https://chat-10-heit.onrender.com/api/analyze";
 
   useEffect(() => {
     const saved = sessionStorage.getItem("resumeData");
