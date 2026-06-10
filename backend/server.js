@@ -11,41 +11,34 @@ dotenv.config();
 
 const app = express();
 
-/* ---------------- CORS (FIXED FOR VERCEL + MOBILE) ---------------- */
-const corsOptions = {
-  origin: function (origin, callback) {
-    // allow server-to-server / postman
-    if (!origin) return callback(null, true);
+const uploadDir = "uploads";
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
-    // allow localhost + all vercel apps
-    if (
-      origin.includes("localhost") ||
-      origin.includes("vercel.app")
-    ) {
+const apiKey = process.env.GROQ_API_KEY;
+if (!apiKey) {
+  throw new Error("Missing GROQ_API_KEY environment variable");
+}
+
+const groq = new Groq({ apiKey });
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (origin.includes("localhost") || origin.includes("vercel.app")) {
       return callback(null, true);
     }
-
-    return callback(null, true); // fallback allow (prevents network error)
+    return callback(null, true);
   },
   methods: ["GET", "POST", "OPTIONS"],
   credentials: true,
 };
 
 app.use(cors(corsOptions));
-
-
-
-/* ---------------- BODY PARSER ---------------- */
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
-/* ---------------- UPLOAD DIR ---------------- */
-const uploadDir = "uploads";
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-
-/* ---------------- MULTER ---------------- */
 const upload = multer({
   dest: uploadDir,
   limits: {
@@ -53,20 +46,10 @@ const upload = multer({
   },
 });
 
-/* ---------------- GROQ ---------------- */
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
-/* ---------------- HEALTH CHECK ---------------- */
 app.get("/", (req, res) => {
-  res.json({
-    success: true,
-    message: "Backend running",
-  });
+  res.json({ success: true, message: "Backend running" });
 });
 
-/* ---------------- ANALYZE API ---------------- */
 app.post("/api/analyze", upload.single("resume"), async (req, res) => {
   let filePath;
 
@@ -92,9 +75,7 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
       });
     }
 
-    const resumeText = pdfData.text
-      .replace(/\s+/g, " ")
-      .slice(0, 6000);
+    const resumeText = pdfData.text.replace(/\s+/g, " ").slice(0, 6000);
 
     if (!resumeText || resumeText.length < 20) {
       return res.status(400).json({
@@ -103,7 +84,6 @@ app.post("/api/analyze", upload.single("resume"), async (req, res) => {
       });
     }
 
-    /* ---------------- AI CALL ---------------- */
     const aiPromise = groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
       messages: [
@@ -128,7 +108,7 @@ Return ONLY JSON:
   "summary": ""
 }
 NO explanation, ONLY JSON.
-          `,
+          `.trim(),
         },
         {
           role: "user",
@@ -143,11 +123,18 @@ NO explanation, ONLY JSON.
 
     const aiResponse = await Promise.race([aiPromise, timeoutPromise]);
 
-    let raw = aiResponse.choices[0].message.content;
-    raw = raw.replace(/```json/g, "").replace(/```/g, "").trim();
+    const raw =
+      aiResponse?.choices?.[0]?.message?.content?.replace(/```json/g, "").replace(/```/g, "").trim() ||
+      "";
+
+    if (!raw) {
+      return res.status(500).json({
+        success: false,
+        error: "Empty AI response",
+      });
+    }
 
     let analysis;
-
     try {
       analysis = JSON.parse(raw);
     } catch {
@@ -157,7 +144,6 @@ NO explanation, ONLY JSON.
       });
     }
 
-    /* ---------------- CLEAN FILE ---------------- */
     if (filePath && fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
@@ -166,9 +152,8 @@ NO explanation, ONLY JSON.
       success: true,
       analysis,
     });
-
   } catch (error) {
-    console.log("ERROR:", error.message);
+    console.error("ERROR:", error?.message || error);
 
     if (filePath && fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
@@ -176,12 +161,11 @@ NO explanation, ONLY JSON.
 
     return res.status(500).json({
       success: false,
-      error: error.message || "Server error",
+      error: error?.message || "Server error",
     });
   }
 });
 
-/* ---------------- START SERVER ---------------- */
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
